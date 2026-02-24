@@ -7,7 +7,7 @@ api_key = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=api_key)
 
 # Tải mô hình AI
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
 
 # --- GIAO DIỆN TRANG WEB ---
 st.title("Hệ thống Tạo đề thi Toán & Vật lý AI") 
