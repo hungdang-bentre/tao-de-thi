@@ -1,6 +1,5 @@
 import streamlit as st
 import google.generativeai as genai
-from PIL import Image
 
 # 1. Cau hinh trang
 st.set_page_config(page_title="AI Exam Pro", page_icon="⚛️", layout="wide")
@@ -19,7 +18,7 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
-    # Su dung ban latest de khong bi loi 404
+    # Su dung ban latest de dam bao luon chay on dinh
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
 except Exception as e:
     st.error("Chưa tìm thấy API Key. Vui lòng kiểm tra lại cấu hình.")
@@ -30,62 +29,42 @@ with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Chọn độ khó cho đề mới:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.info("💡 Cập nhật mới: Gửi trực tiếp nguyên bản file PDF cho AI. Đảm bảo giữ nguyên vẹn 100% công thức Toán (tích phân, ma trận, vectơ...).")
+    st.info("💡 Chế độ: Nhập văn bản thuần túy. Rất ổn định, phù hợp khi bạn copy đề từ file Word hoặc gõ trực tiếp.")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Tối ưu hóa cho Toán học & Vật lý</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Tối ưu hóa cho Toán học & Vật lý (Chế độ Văn bản)</div>', unsafe_allow_html=True)
 
-def get_prompt(level):
+def get_prompt(level, text_input):
     return f"""
     Bạn là chuyên gia giáo dục xuất sắc chuyên về Toán học và Vật lý.
     PHẦN 1: Bắt buộc kiểm tra nội dung. Nếu KHÔNG PHẢI Toán hoặc Vật lý, chỉ được trả lời: "TỪ_CHỐI_MÔN_HỌC".
     PHẦN 2: Tạo đề thi mới với độ khó: {level}.
-    Dựa vào file PDF, văn bản hoặc hình ảnh được cung cấp, hãy thay đổi các số liệu, phương trình, toạ độ, hệ vectơ nhưng giữ nguyên bản chất.
-    Bắt buộc trình bày các công thức toán học, ký hiệu vectơ bằng chuẩn LaTeX tuyệt đẹp.
+    Dựa vào văn bản đề thi gốc dưới đây, hãy thay đổi các số liệu, phương trình, toạ độ, biến số nhưng giữ nguyên bản chất và cấu trúc bài toán.
+    Bắt buộc trình bày các công thức toán học bằng chuẩn LaTeX tuyệt đẹp.
+    
+    Đây là đề thi gốc:
+    {text_input}
     """
 
 # 6. Giao dien chinh chia 2 cot
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.markdown("### 📥 Đầu vào (Tài liệu gốc)")
-    
-    # AI se doc truc tiep file PDF nay
-    pdf_file = st.file_uploader("1. Tải file PDF trực tiếp (Khuyên dùng để giữ nguyên công thức):", type=["pdf"])
-            
-    existing_text = st.text_area("2. Nội dung văn bản bổ sung (Tự gõ hoặc Copy/Paste):", height=150)
-    
-    img_file = st.file_uploader("3. Tải lên hoặc dán (Ctrl+V) ảnh hình học/đồ thị bổ sung:", type=["png", "jpg", "jpeg"])
-    if img_file is not None:
-        image = Image.open(img_file)
-        st.image(image, caption="Ảnh đính kèm", width=250)
-        
-    btn_generate = st.button("🚀 AI Đọc Dữ liệu & Tạo Đề Mới", key="btn_gen")
+    st.markdown("### 📥 Đầu vào (Văn bản)")
+    existing_text = st.text_area("Dán nội dung đề thi vào đây (Tự gõ hoặc Copy/Paste):", height=400)
+    btn_generate = st.button("🚀 Xử lý Văn bản & Tạo Đề Mới", key="btn_gen")
 
 with col2:
     st.markdown("### 📤 Kết quả (AI Sinh ra)")
     if btn_generate:
-        if not existing_text.strip() and img_file is None and pdf_file is None:
-            st.warning("⚠️ Vui lòng cung cấp ít nhất 1 loại dữ liệu (PDF, Văn bản, hoặc Ảnh)!")
+        if not existing_text.strip():
+            st.warning("⚠️ Vui lòng dán nội dung đề thi vào ô trống trước!")
         else:
-            with st.spinner("🔬 AI đang đọc trực tiếp dữ liệu gốc và suy luận logic..."):
+            with st.spinner("🔬 AI đang đọc văn bản và suy luận logic..."):
                 try:
-                    contents_to_send = [get_prompt(difficulty)]
-                    
-                    if pdf_file is not None:
-                        contents_to_send.append({
-                            "mime_type": "application/pdf",
-                            "data": pdf_file.getvalue()
-                        })
-                    
-                    if existing_text.strip():
-                        contents_to_send.append(f"Văn bản bổ sung:\n{existing_text}")
-                        
-                    if img_file is not None:
-                        contents_to_send.append(image)
-
-                    response = model.generate_content(contents_to_send)
+                    prompt = get_prompt(difficulty, existing_text)
+                    response = model.generate_content(prompt)
                     
                     if "TỪ_CHỐI_MÔN_HỌC" in response.text:
                         st.error("❌ Xin lỗi, hệ thống chỉ hỗ trợ phân tích môn Toán và Vật lý!")
