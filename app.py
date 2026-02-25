@@ -24,7 +24,7 @@ try:
     
     # Ưu tiên tìm bản flash mới nhất, nếu không có thì lùi về bản pro hoặc bản tiêu chuẩn
     for name in available_models:
-        if "gemini-1.5-flash" in name:
+        if "gemini-3-flash" in name:
             selected_model = name
             break
         elif "gemini-1.5-pro" in name:
