@@ -88,4 +88,3 @@ with col2:
                         st.markdown(response.text)
                 except Exception as e:
                     st.error(f"Lỗi hệ thống khi sinh chữ: {e}")
-
