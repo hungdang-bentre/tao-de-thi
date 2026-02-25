@@ -14,14 +14,29 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI
+# 3. Khoi tao ket noi AI va Tự động quét mô hình (Ý tưởng của bạn)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
-    # Su dung ban latest de dam bao luon chay on dinh
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    # Quét tất cả các mô hình mà API Key này được phép dùng
+    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    
+    selected_model = available_models[0] # Khởi tạo mặc định
+    
+    # Ưu tiên tìm bản Flash (để lấy hạn mức miễn phí lớn), nếu không có mới lùi về Pro
+    for name in available_models:
+        if "flash" in name.lower() and "8b" not in name.lower():
+            selected_model = name
+            break
+        elif "pro" in name.lower():
+            selected_model = name
+            
+    st.success(f"Đã tự động nhận diện và kết nối thành công với AI: {selected_model}")
+    model = genai.GenerativeModel(selected_model)
+    
 except Exception as e:
-    st.error("Chưa tìm thấy API Key. Vui lòng kiểm tra lại cấu hình.")
+    st.error(f"Lỗi khi quét danh sách mô hình từ Google: {e}")
     st.stop()
 
 # 4. Thanh cong cu ben trai
@@ -29,7 +44,7 @@ with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Chọn độ khó cho đề mới:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.info("💡 Chế độ: Nhập văn bản thuần túy. Rất ổn định, phù hợp khi bạn copy đề từ file Word hoặc gõ trực tiếp.")
+    st.info("💡 Chế độ: Nhập văn bản thuần túy. Code đã được tích hợp thuật toán quét Model tự động để chống lỗi 404.")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
@@ -72,4 +87,4 @@ with col2:
                         st.success("✅ Đã tạo thành công!")
                         st.markdown(response.text)
                 except Exception as e:
-                    st.error(f"Lỗi hệ thống: {e}")
+                    st.error(f"Lỗi hệ thống khi sinh chữ: {e}")
