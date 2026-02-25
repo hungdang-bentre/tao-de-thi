@@ -71,5 +71,20 @@ if button_clicked:
         st.warning("Vui lòng dán nội dung đề thi vào ô trống trước!")
 import streamlit as st
 import google.generativeai as genai
+import streamlit as st
+import google.generativeai as genai
+
+st.write("Tải lên hoặc dán (Ctrl+V) ảnh chụp đề thi gốc của bạn. AI sẽ đọc chữ và hình vẽ trong ảnh để tạo ra đề mới.")
+
+Khung tải ảnh lên (hỗ trợ kéo thả hoặc bấm Ctrl+V để dán ảnh chụp màn hình)
+uploaded_file = st.file_uploader("Tải ảnh hoặc dán ảnh đề thi vào đây:", type=["png", "jpg", "jpeg"])
+
+button_clicked = st.button("Tạo Đề Thi Mới")
+
+if button_clicked:
+if uploaded_file is not None:
+# Mở và hiển thị ảnh cho người dùng xem lại
+image = Image.open(uploaded_file)
+st.image(image, caption="Ảnh đề thi bạn vừa tải lên", use_container_width=True)
 
 st.set_page_config(page_title="Tạo Đề Thi AI", layout="centered")
