@@ -37,7 +37,6 @@ except Exception as e:
 
 # --- DUY TRÌ BỘ NHỚ KHO ĐỀ (SESSION STATE) ---
 if "kho_de" not in st.session_state:
-    # Một vài đề mẫu ban đầu để kho không bị trống
     st.session_state.kho_de = [
         {"loai": "THPT Quốc Gia", "mon": "Toán", "ten": "Đề mẫu: Khảo sát Hàm số (VD)", "noi_dung": "Cho hàm số y = x^3 - 3x^2 + 2. Tìm các khoảng đồng biến, nghịch biến và điểm cực đại, cực tiểu của hàm số."},
         {"loai": "Học Sinh Giỏi", "mon": "Vật lý", "ten": "Đề mẫu: Động lực học vật rắn (VD)", "noi_dung": "Một khối trụ đặc đồng chất khối lượng M, bán kính R lăn không trượt trên mặt phẳng nghiêng góc alpha so với phương ngang. Hãy thiết lập phương trình động lực học và tính gia tốc tịnh tiến của khối tâm trụ."}
@@ -51,7 +50,7 @@ with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Độ khó sinh ra:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.info("💡 **Tính năng mới:** Đã chia kho đề thành THPT Quốc Gia và HSG. Bạn có thể tự dán thêm đề mới vào kho ở Tab 2.")
+    st.info("💡 **Bảo mật:** Đã khóa chức năng Thêm Đề Mới. Chỉ Admin (người có mật khẩu) mới được phép đẩy đề lên hệ thống.")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
@@ -59,17 +58,17 @@ st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (THPT 
 
 def get_prompt(level, text_input):
     return f"""
-    Bạn là chuyên gia giáo dục xuất sắc chuyên ra đề thi Toán và Vật lý cấp THPT (bao gồm thi THPT Quốc Gia và thi Học Sinh Giỏi).
+    Bạn là chuyên gia giáo dục xuất sắc chuyên ra đề thi Toán và Vật lý cấp THPT.
     PHẦN 1: Bắt buộc kiểm tra nội dung. Nếu KHÔNG PHẢI Toán hoặc Vật lý, chỉ trả lời: "TỪ_CHỐI_MÔN_HỌC".
     
     PHẦN 2: TẠO ĐỀ VÀ GIẢI CHI TIẾT
-    Tạo một đề thi mới với độ khó: {level} dựa trên cấu trúc, phong cách của đề gốc dưới đây.
+    Tạo một đề thi mới với độ khó: {level} dựa trên cấu trúc của đề gốc dưới đây.
     
     YÊU CẦU:
     1. Trình bày công thức bằng chuẩn LaTeX.
-    2. Trình bày kết quả thành 2 phần rõ rệt:
-       - **ĐỀ BÀI MỚI**: Ghi nội dung câu hỏi mới.
-       - **LỜI GIẢI CHI TIẾT**: Giải từng bước, suy luận logic, chặt chẽ tới đáp án cuối.
+    2. Trình bày kết quả thành 2 phần:
+       - **ĐỀ BÀI MỚI**
+       - **LỜI GIẢI CHI TIẾT**
     
     Đề gốc:
     {text_input}
@@ -106,8 +105,7 @@ with tab1:
 
 # --- TAB 2: NGÂN HÀNG ĐỀ THI ---
 with tab2:
-    # Chia tab nhỏ bên trong tab 2 để tách biệt khu vực "Xem kho" và "Thêm vào kho"
-    sub_tab_xem, sub_tab_them = st.tabs(["🔎 Duyệt & Chọn Đề Trong Kho", "➕ Tự Đưa Đề Mới Vào Kho"])
+    sub_tab_xem, sub_tab_them = st.tabs(["🔎 Duyệt & Chọn Đề Trong Kho", "➕ Tự Đưa Đề Mới Vào Kho (Chỉ dành cho Admin)"])
     
     with sub_tab_them:
         st.markdown("### 📥 Thêm đề của bạn vào hệ thống")
@@ -121,20 +119,28 @@ with tab2:
             ten_de_moi = st.text_input("Tên bài / Chủ đề (Ví dụ: Câu 45 Đề Toán HN 2024):")
             noi_dung_moi = st.text_area("Dán nội dung câu hỏi/đề bài vào đây:", height=150)
             
-            submit_btn = st.form_submit_button("💾 Lưu Trữ Vào Kho Đề")
+            # --- Ô NHẬP MẬT KHẨU BẢO MẬT ---
+            st.markdown("---")
+            admin_pass = st.text_input("🔑 Nhập Mật Khẩu Quản Trị Viên (Bắt buộc):", type="password")
+            
+            submit_btn = st.form_submit_button("💾 Xác Nhận & Lưu Trữ Vào Kho")
             
             if submit_btn:
-                if ten_de_moi.strip() and noi_dung_moi.strip():
-                    # Thêm dữ liệu vào kho lưu trữ
+                # Lấy mật khẩu từ cấu hình (Nếu chưa cài, mặc định là admin123)
+                mat_khau_goc = st.secrets.get("ADMIN_PASSWORD", "admin123")
+                
+                if admin_pass != mat_khau_goc:
+                    st.error("❌ Mật khẩu không chính xác! Bạn không có quyền thêm đề vào kho.")
+                elif not ten_de_moi.strip() or not noi_dung_moi.strip():
+                    st.warning("⚠️ Vui lòng nhập đầy đủ Tên bài và Nội dung!")
+                else:
                     st.session_state.kho_de.append({
                         "loai": loai_de_moi,
                         "mon": mon_de_moi,
                         "ten": ten_de_moi,
                         "noi_dung": noi_dung_moi
                     })
-                    st.success(f"🎉 Đã thêm thành công '{ten_de_moi}' vào kho! Bạn có thể sang tab 'Duyệt Kho' để sử dụng ngay.")
-                else:
-                    st.error("⚠️ Vui lòng nhập Tên bài và Nội dung!")
+                    st.success(f"🎉 Tuyệt vời! Bạn đã vượt qua bảo mật và thêm thành công '{ten_de_moi}' vào kho.")
 
     with sub_tab_xem:
         col3, col4 = st.columns([1, 1])
@@ -146,16 +152,14 @@ with tab2:
             with col_d:
                 loc_mon = st.selectbox("Lọc theo Môn:", ["Tất cả", "Toán", "Vật lý"])
             
-            # Lọc danh sách đề trong kho dựa trên lựa chọn
             de_phu_hop = [de for de in st.session_state.kho_de if (loc_loai == "Tất cả" or de["loai"] == loc_loai) and (loc_mon == "Tất cả" or de["mon"] == loc_mon)]
             
             if not de_phu_hop:
-                st.warning("⚠️ Chưa có đề nào trong thư mục này. Hãy sang thẻ 'Thêm Đề Mới' để cập nhật nhé!")
+                st.warning("⚠️ Chưa có đề nào trong thư mục này.")
             else:
                 danh_sach_ten = [de["ten"] for de in de_phu_hop]
                 selected_ten = st.selectbox("📌 Chọn bài để luyện tập:", danh_sach_ten)
                 
-                # Lấy nội dung của đề đang chọn
                 de_dang_chon = next(de for de in de_phu_hop if de["ten"] == selected_ten)
                 st.markdown("**Nội dung đề gốc:**")
                 st.markdown(f'<div class="question-box">{de_dang_chon["noi_dung"]}</div>', unsafe_allow_html=True)
