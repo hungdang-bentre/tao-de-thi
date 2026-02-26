@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import docx  # Thư viện mới để đọc file Word
 
 # 1. Cau hinh trang
 st.set_page_config(page_title="AI Exam Pro", page_icon="⚛️", layout="wide")
@@ -35,7 +36,7 @@ except Exception as e:
     st.error(f"Lỗi khi kết nối AI: {e}")
     st.stop()
 
-# --- DUY TRÌ BỘ NHỚ KHO ĐỀ (SESSION STATE) ---
+# --- DUY TRÌ BỘ NHỚ KHO ĐỀ & VĂN BẢN TRÍCH XUẤT ---
 if "kho_de" not in st.session_state:
     st.session_state.kho_de = [
         {"loai": "THPT Quốc Gia", "mon": "Toán", "ten": "Đề mẫu: Khảo sát Hàm số (VD)", "noi_dung": "Cho hàm số y = x^3 - 3x^2 + 2. Tìm các khoảng đồng biến, nghịch biến và điểm cực đại, cực tiểu của hàm số."},
@@ -45,16 +46,19 @@ if "kho_de" not in st.session_state:
 if "generated_result" not in st.session_state:
     st.session_state.generated_result = ""
 
+if "input_text" not in st.session_state:
+    st.session_state.input_text = ""
+
 # 4. Thanh cong cu ben trai
 with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Độ khó sinh ra:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.info("💡 **Bảo mật:** Đã khóa chức năng Thêm Đề Mới. Chỉ Admin (người có mật khẩu) mới được phép đẩy đề lên hệ thống.")
+    st.info("💡 **Tính năng mới:** Đã tích hợp công cụ đọc file Word (.docx) tự động ở Tab 1.")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (THPT Quốc Gia & HSG)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Hỗ trợ đọc file Word)</div>', unsafe_allow_html=True)
 
 def get_prompt(level, text_input):
     return f"""
@@ -75,19 +79,41 @@ def get_prompt(level, text_input):
     """
 
 # 6. CHIA TAB GIAO DIỆN
-tab1, tab2 = st.tabs(["📝 Tạo Đề Tự Do (Dán trực tiếp)", "📚 Ngân Hàng Đề Thi (THPTQG & HSG)"])
+tab1, tab2 = st.tabs(["📝 Tạo Đề Tự Do (Word / Dán chữ)", "📚 Ngân Hàng Đề Thi (Quản trị viên)"])
 
-# --- TAB 1: GIAO DIỆN NHẬP TỰ DO ---
+# --- TAB 1: GIAO DIỆN NHẬP TỰ DO & ĐỌC WORD ---
 with tab1:
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.markdown("### 📥 Đầu vào tự do")
-        existing_text = st.text_area("Dán bài tập bất kỳ vào đây:", height=300)
-        if st.button("🚀 Tạo Đề & Lời Giải", key="btn_tab1"):
+        st.markdown("### 📥 Đầu vào tài liệu")
+        
+        # Tính năng tải file Word
+        uploaded_word = st.file_uploader("1. Tải lên file Word (.docx) để trích xuất chữ:", type=["docx"])
+        if uploaded_word is not None:
+            if st.button("📄 Rút trích chữ từ file Word"):
+                try:
+                    doc = docx.Document(uploaded_word)
+                    full_text = []
+                    for para in doc.paragraphs:
+                        full_text.append(para.text)
+                    # Gộp chữ lại và lưu vào bộ nhớ tạm
+                    st.session_state.input_text = "\n".join(full_text)
+                    st.rerun() # Làm mới trang để chữ hiện xuống ô bên dưới
+                except Exception as e:
+                    st.error(f"Lỗi khi đọc file Word: {e}")
+        
+        # Ô nhập chữ (tự động nhận chữ từ Word hoặc tự dán)
+        existing_text = st.text_area("2. Nội dung đề bài (Chỉnh sửa tự do):", value=st.session_state.input_text, height=250)
+        
+        # Nút tạo đề
+        if st.button("🚀 AI Tạo Đề & Lời Giải", key="btn_tab1"):
+            # Cập nhật lại bộ nhớ tạm nếu người dùng có chỉnh sửa tay
+            st.session_state.input_text = existing_text 
+            
             if not existing_text.strip():
-                st.warning("⚠️ Vui lòng dán đề vào ô trống!")
+                st.warning("⚠️ Vui lòng tải file Word hoặc dán chữ vào ô trống!")
             else:
-                with st.spinner("🔬 AI đang sinh đề mới..."):
+                with st.spinner("🔬 AI đang phân tích dữ liệu và sinh đề mới..."):
                     try:
                         response = model.generate_content(get_prompt(difficulty, existing_text))
                         st.session_state.generated_result = response.text
@@ -95,17 +121,17 @@ with tab1:
                         st.error(f"Lỗi: {e}")
 
     with col2:
-        st.markdown("### 📤 Kết quả")
+        st.markdown("### 📤 Kết quả & Đáp án")
         if st.session_state.generated_result:
             if "TỪ_CHỐI_MÔN_HỌC" in st.session_state.generated_result:
-                st.error("❌ Chỉ hỗ trợ Toán và Vật lý!")
+                st.error("❌ Chỉ hỗ trợ các môn Khoa học (Toán, Vật lý)!")
             else:
                 st.success("✅ Đã tạo thành công!")
                 st.markdown(st.session_state.generated_result)
 
-# --- TAB 2: NGÂN HÀNG ĐỀ THI ---
+# --- TAB 2: NGÂN HÀNG ĐỀ THI (BẢO MẬT) ---
 with tab2:
-    sub_tab_xem, sub_tab_them = st.tabs(["🔎 Duyệt & Chọn Đề Trong Kho", "➕ Tự Đưa Đề Mới Vào Kho (Chỉ dành cho Admin)"])
+    sub_tab_xem, sub_tab_them = st.tabs(["🔎 Duyệt & Chọn Đề Trong Kho", "➕ Tự Đưa Đề Mới Vào Kho (Admin)"])
     
     with sub_tab_them:
         st.markdown("### 📥 Thêm đề của bạn vào hệ thống")
@@ -116,17 +142,15 @@ with tab2:
             with col_b:
                 mon_de_moi = st.selectbox("Môn học:", ["Toán", "Vật lý"])
                 
-            ten_de_moi = st.text_input("Tên bài / Chủ đề (Ví dụ: Câu 45 Đề Toán HN 2024):")
+            ten_de_moi = st.text_input("Tên bài / Chủ đề (Ví dụ: Động học chất điểm):")
             noi_dung_moi = st.text_area("Dán nội dung câu hỏi/đề bài vào đây:", height=150)
             
-            # --- Ô NHẬP MẬT KHẨU BẢO MẬT ---
             st.markdown("---")
-            admin_pass = st.text_input("🔑 Nhập Mật Khẩu Quản Trị Viên (Bắt buộc):", type="password")
+            admin_pass = st.text_input("🔑 Nhập Mật Khẩu Quản Trị Viên:", type="password")
             
             submit_btn = st.form_submit_button("💾 Xác Nhận & Lưu Trữ Vào Kho")
             
             if submit_btn:
-                # Lấy mật khẩu từ cấu hình (Nếu chưa cài, mặc định là admin123)
                 mat_khau_goc = st.secrets.get("ADMIN_PASSWORD", "admin123")
                 
                 if admin_pass != mat_khau_goc:
@@ -140,7 +164,7 @@ with tab2:
                         "ten": ten_de_moi,
                         "noi_dung": noi_dung_moi
                     })
-                    st.success(f"🎉 Tuyệt vời! Bạn đã vượt qua bảo mật và thêm thành công '{ten_de_moi}' vào kho.")
+                    st.success(f"🎉 Đã bảo mật và thêm thành công '{ten_de_moi}' vào kho.")
 
     with sub_tab_xem:
         col3, col4 = st.columns([1, 1])
