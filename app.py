@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
-import docx  # Thư viện mới để đọc file Word
+import docx  
+import io  # Thư viện dùng để đóng gói file tải về
 
 # 1. Cau hinh trang
 st.set_page_config(page_title="AI Exam Pro", page_icon="⚛️", layout="wide")
@@ -13,6 +14,7 @@ st.markdown("""
 div.stButton > button:first-child { background-color: #2563EB; color: white; border-radius: 8px; font-weight: bold; padding: 10px; width: 100%; transition: all 0.3s ease; }
 div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: scale(1.02); }
 .question-box { background-color: #f8fafc; padding: 15px; border-left: 5px solid #0284c7; border-radius: 5px; margin-bottom: 20px; font-family: monospace; white-space: pre-wrap; }
+.download-btn { margin-bottom: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -36,7 +38,7 @@ except Exception as e:
     st.error(f"Lỗi khi kết nối AI: {e}")
     st.stop()
 
-# --- DUY TRÌ BỘ NHỚ KHO ĐỀ & VĂN BẢN TRÍCH XUẤT ---
+# --- DUY TRÌ BỘ NHỚ ---
 if "kho_de" not in st.session_state:
     st.session_state.kho_de = [
         {"loai": "THPT Quốc Gia", "mon": "Toán", "ten": "Đề mẫu: Khảo sát Hàm số (VD)", "noi_dung": "Cho hàm số y = x^3 - 3x^2 + 2. Tìm các khoảng đồng biến, nghịch biến và điểm cực đại, cực tiểu của hàm số."},
@@ -49,16 +51,31 @@ if "generated_result" not in st.session_state:
 if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 
+# --- HÀM TẠO FILE WORD ĐỂ TẢI VỀ ---
+def create_word_file(text_content):
+    doc = docx.Document()
+    doc.add_heading('ĐỀ THI VÀ LỜI GIẢI (AI Sinh)', 0)
+    
+    # Tách đoạn văn bản và thêm vào file Word
+    for paragraph in text_content.split('\n'):
+        if paragraph.strip():
+            doc.add_paragraph(paragraph)
+            
+    # Đóng gói file vào bộ nhớ đệm để tải xuống
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    return file_stream.getvalue()
+
 # 4. Thanh cong cu ben trai
 with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Độ khó sinh ra:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.info("💡 **Tính năng mới:** Đã tích hợp công cụ đọc file Word (.docx) tự động ở Tab 1.")
+    st.info("💡 **Tính năng mới:** Đã thêm nút xuất file Word (Tải xuống) ngay phía trên kết quả AI sinh ra.")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Hỗ trợ đọc file Word)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Có Xuất File Word)</div>', unsafe_allow_html=True)
 
 def get_prompt(level, text_input):
     return f"""
@@ -87,7 +104,6 @@ with tab1:
     with col1:
         st.markdown("### 📥 Đầu vào tài liệu")
         
-        # Tính năng tải file Word
         uploaded_word = st.file_uploader("1. Tải lên file Word (.docx) để trích xuất chữ:", type=["docx"])
         if uploaded_word is not None:
             if st.button("📄 Rút trích chữ từ file Word"):
@@ -96,18 +112,14 @@ with tab1:
                     full_text = []
                     for para in doc.paragraphs:
                         full_text.append(para.text)
-                    # Gộp chữ lại và lưu vào bộ nhớ tạm
                     st.session_state.input_text = "\n".join(full_text)
-                    st.rerun() # Làm mới trang để chữ hiện xuống ô bên dưới
+                    st.rerun() 
                 except Exception as e:
                     st.error(f"Lỗi khi đọc file Word: {e}")
         
-        # Ô nhập chữ (tự động nhận chữ từ Word hoặc tự dán)
         existing_text = st.text_area("2. Nội dung đề bài (Chỉnh sửa tự do):", value=st.session_state.input_text, height=250)
         
-        # Nút tạo đề
         if st.button("🚀 AI Tạo Đề & Lời Giải", key="btn_tab1"):
-            # Cập nhật lại bộ nhớ tạm nếu người dùng có chỉnh sửa tay
             st.session_state.input_text = existing_text 
             
             if not existing_text.strip():
@@ -127,9 +139,21 @@ with tab1:
                 st.error("❌ Chỉ hỗ trợ các môn Khoa học (Toán, Vật lý)!")
             else:
                 st.success("✅ Đã tạo thành công!")
+                
+                # --- NÚT TẢI XUỐNG FILE WORD ---
+                word_file = create_word_file(st.session_state.generated_result)
+                st.download_button(
+                    label="📥 Tải Kết Quả Về Máy (File Word)",
+                    data=word_file,
+                    file_name="De_Thi_Va_Loi_Giai.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+                st.markdown("---")
+                # -------------------------------
+                
                 st.markdown(st.session_state.generated_result)
 
-# --- TAB 2: NGÂN HÀNG ĐỀ THI (BẢO MẬT) ---
+# --- TAB 2: NGÂN HÀNG ĐỀ THI ---
 with tab2:
     sub_tab_xem, sub_tab_them = st.tabs(["🔎 Duyệt & Chọn Đề Trong Kho", "➕ Tự Đưa Đề Mới Vào Kho (Admin)"])
     
@@ -142,7 +166,7 @@ with tab2:
             with col_b:
                 mon_de_moi = st.selectbox("Môn học:", ["Toán", "Vật lý"])
                 
-            ten_de_moi = st.text_input("Tên bài / Chủ đề (Ví dụ: Động học chất điểm):")
+            ten_de_moi = st.text_input("Tên bài / Chủ đề:")
             noi_dung_moi = st.text_area("Dán nội dung câu hỏi/đề bài vào đây:", height=150)
             
             st.markdown("---")
@@ -203,4 +227,17 @@ with tab2:
                     st.error("❌ Lỗi chủ đề!")
                 else:
                     st.success("✅ Đã tạo thành công!")
+                    
+                    # --- NÚT TẢI XUỐNG FILE WORD ---
+                    word_file_tab2 = create_word_file(st.session_state.generated_result)
+                    st.download_button(
+                        label="📥 Tải Kết Quả Về Máy (File Word)",
+                        data=word_file_tab2,
+                        file_name="De_On_Tap_AI.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="download_tab2"
+                    )
+                    st.markdown("---")
+                    # -------------------------------
+                    
                     st.markdown(st.session_state.generated_result)
