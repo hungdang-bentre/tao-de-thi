@@ -18,14 +18,36 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (CỐ ĐỊNH PHIÊN BẢN - KHÔNG QUÉT TỰ ĐỘNG)
+# 3. Khoi tao ket noi AI (THUẬT TOÁN QUÉT VÀ LỌC THÔNG MINH)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    # "Bắt chết" phiên bản 1.5 Flash để nhận hạn mức 1500 lần/ngày.
-    # Loại bỏ hoàn toàn tính năng quét để tránh bị dính bản 2.0 hoặc 2.5 limit 0.
-    selected_model = "gemini-1.5-flash"
+    # Hỏi Google danh sách các mô hình đang TỒN TẠI THỰC TẾ (Chống lỗi 404)
+    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    
+    selected_model = None
+    
+    # BƯỚC 1: Tìm bản 1.5 flash chuẩn, né bản 8b và bản thử nghiệm (exp)
+    for name in available_models:
+        if "1.5-flash" in name.lower() and "8b" not in name.lower() and "exp" not in name.lower():
+            selected_model = name
+            break
+            
+    # BƯỚC 2: Nếu Google giấu bản flash, lùi về bản 1.5 pro
+    if not selected_model:
+        for name in available_models:
+            if "1.5-pro" in name.lower() and "exp" not in name.lower():
+                selected_model = name
+                break
+                
+    # BƯỚC 3: Chốt chặn an toàn (Chống lỗi 429) - Chọn bất kỳ bản nào KHÔNG PHẢI 2.0 hay 2.5
+    if not selected_model:
+        for name in available_models:
+            if "2.0" not in name and "2.5" not in name:
+                selected_model = name
+                break
+                
     model = genai.GenerativeModel(selected_model)
     
 except Exception as e:
@@ -71,7 +93,7 @@ with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Độ khó sinh ra:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.success(f"🤖 Đã khóa chặt model: **{selected_model}** (Miễn nhiễm với lỗi quá tải).")
+    st.success(f"🤖 Đã kết nối an toàn với: **{selected_model.split('/')[-1]}**")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
@@ -139,99 +161,4 @@ with tab1:
             else:
                 st.success("✅ Đã tạo thành công!")
                 
-                docx_file = create_docx(st.session_state.generated_result)
-                st.download_button(
-                    label="📥 Tải kết quả về máy (File Word .docx)",
-                    data=docx_file,
-                    file_name="De_Thi_AI_Generated.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-                
-                st.markdown(st.session_state.generated_result)
-
-# --- TAB 2: NGÂN HÀNG ĐỀ THI (BẢO MẬT) ---
-with tab2:
-    sub_tab_xem, sub_tab_them = st.tabs(["🔎 Duyệt & Chọn Đề Trong Kho", "➕ Tự Đưa Đề Mới Vào Kho (Admin)"])
-    
-    with sub_tab_them:
-        st.markdown("### 📥 Thêm đề của bạn vào hệ thống")
-        with st.form("form_them_de"):
-            col_a, col_b = st.columns(2)
-            with col_a:
-                loai_de_moi = st.selectbox("Phân loại kỳ thi:", ["THPT Quốc Gia", "Học Sinh Giỏi"])
-            with col_b:
-                mon_de_moi = st.selectbox("Môn học:", ["Toán", "Vật lý"])
-                
-            ten_de_moi = st.text_input("Tên bài / Chủ đề (Ví dụ: Động học chất điểm):")
-            noi_dung_moi = st.text_area("Dán nội dung câu hỏi/đề bài vào đây:", height=150)
-            
-            st.markdown("---")
-            admin_pass = st.text_input("🔑 Nhập Mật Khẩu Quản Trị Viên:", type="password")
-            
-            submit_btn = st.form_submit_button("💾 Xác Nhận & Lưu Trữ Vào Kho")
-            
-            if submit_btn:
-                mat_khau_goc = st.secrets.get("ADMIN_PASSWORD", "admin123")
-                if admin_pass != mat_khau_goc:
-                    st.error("❌ Mật khẩu không chính xác!")
-                elif not ten_de_moi.strip() or not noi_dung_moi.strip():
-                    st.warning("⚠️ Vui lòng nhập đầy đủ Tên bài và Nội dung!")
-                else:
-                    st.session_state.kho_de.append({
-                        "loai": loai_de_moi,
-                        "mon": mon_de_moi,
-                        "ten": ten_de_moi,
-                        "noi_dung": noi_dung_moi
-                    })
-                    st.toast(f"🎉 Đã thêm thành công '{ten_de_moi}' vào kho!", icon="✅")
-                    time.sleep(1.2)
-                    st.rerun()
-
-    with sub_tab_xem:
-        col3, col4 = st.columns([1, 1])
-        with col3:
-            st.markdown("### 🗂️ Bộ Lọc Đề Thi")
-            col_c, col_d = st.columns(2)
-            with col_c:
-                loc_loai = st.selectbox("Lọc theo Kỳ thi:", ["Tất cả", "THPT Quốc Gia", "Học Sinh Giỏi"])
-            with col_d:
-                loc_mon = st.selectbox("Lọc theo Môn:", ["Tất cả", "Toán", "Vật lý"])
-            
-            de_phu_hop = [de for de in st.session_state.kho_de if (loc_loai == "Tất cả" or de["loai"] == loc_loai) and (loc_mon == "Tất cả" or de["mon"] == loc_mon)]
-            
-            if not de_phu_hop:
-                st.warning("⚠️ Chưa có đề nào trong thư mục này.")
-            else:
-                danh_sach_ten = [de["ten"] for de in de_phu_hop]
-                selected_ten = st.selectbox("📌 Chọn bài để luyện tập:", danh_sach_ten)
-                
-                de_dang_chon = next(de for de in de_phu_hop if de["ten"] == selected_ten)
-                st.markdown("**Nội dung đề gốc:**")
-                st.markdown(f'<div class="question-box">{de_dang_chon["noi_dung"]}</div>', unsafe_allow_html=True)
-                
-                if st.button("🔄 AI Tạo Đề Mới Tương Tự & Giải", key="btn_tab2"):
-                    with st.spinner(f"🔬 AI đang phân tích và tạo bài tương tự..."):
-                        try:
-                            response = model.generate_content(get_prompt(difficulty, de_dang_chon["noi_dung"]))
-                            st.session_state.generated_result = response.text
-                        except Exception as e:
-                            st.error(f"Lỗi: {e}")
-
-        with col4:
-            st.markdown("### 📤 Kết quả & Tải về")
-            if st.session_state.generated_result:
-                if "TỪ_CHỐI_MÔN_HỌC" in st.session_state.generated_result:
-                    st.error("❌ Lỗi chủ đề!")
-                else:
-                    st.success("✅ Đã tạo thành công!")
-                    
-                    docx_file_2 = create_docx(st.session_state.generated_result)
-                    st.download_button(
-                        label="📥 Tải kết quả về máy (File Word)",
-                        data=docx_file_2,
-                        file_name="Bai_Tap_On_Luyen.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key="dl_btn_2"
-                    )
-                    
-                    st.markdown(st.session_state.generated_result)
+                docx_file = create_docx(st.session_
