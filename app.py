@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import docx
 from io import BytesIO 
+import time  # Thư viện để hẹn giờ tải lại trang
 
 # 1. Cau hinh trang
 st.set_page_config(page_title="AI Exam Pro", page_icon="⚛️", layout="wide")
@@ -17,7 +18,7 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (THUẬT TOÁN QUÉT THÔNG MINH CHỐNG 404 & 429)
+# 3. Khoi tao ket noi AI
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
@@ -195,13 +196,21 @@ with tab2:
                 elif not ten_de_moi.strip() or not noi_dung_moi.strip():
                     st.warning("⚠️ Vui lòng nhập đầy đủ Tên bài và Nội dung!")
                 else:
+                    # Lưu đề mới vào bộ nhớ
                     st.session_state.kho_de.append({
                         "loai": loai_de_moi,
                         "mon": mon_de_moi,
                         "ten": ten_de_moi,
                         "noi_dung": noi_dung_moi
                     })
-                    st.success(f"🎉 Đã thêm thành công '{ten_de_moi}' vào kho.")
+                    # Hiển thị thông báo nổi bọt (Toast)
+                    st.toast(f"🎉 Đã thêm thành công '{ten_de_moi}' vào kho!", icon="✅")
+                    
+                    # Tạm dừng 1 giây để người dùng đọc thông báo
+                    time.sleep(1.2)
+                    
+                    # ÉP TRANG WEB TẢI LẠI ĐỂ CẬP NHẬT DANH SÁCH DROPDOWN NGAY LẬP TỨC
+                    st.rerun()
 
     with sub_tab_xem:
         col3, col4 = st.columns([1, 1])
