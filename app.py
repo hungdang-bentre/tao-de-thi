@@ -17,7 +17,7 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI
+# 3. Khoi tao ket noi AI (CẤM CỬA GEMMA, CHỈ DÙNG GEMINI)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
@@ -25,23 +25,30 @@ try:
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     selected_model = None
     
+    # Ưu tiên 1: Tìm đúng Gemini 1.5 Flash (Bỏ qua 8b và exp)
     for name in available_models:
-        if "1.5-flash" in name.lower() and "8b" not in name.lower() and "exp" not in name.lower():
+        if "gemini-1.5-flash" in name.lower() and "8b" not in name.lower() and "exp" not in name.lower():
             selected_model = name
             break
             
+    # Ưu tiên 2: Tìm Gemini 1.5 Pro
     if not selected_model:
         for name in available_models:
-            if "1.5-pro" in name.lower() and "exp" not in name.lower():
+            if "gemini-1.5-pro" in name.lower() and "exp" not in name.lower():
                 selected_model = name
                 break
                 
+    # Ưu tiên 3: Nếu bí quá, lấy bất kỳ bản GEMINI nào (Tuyệt đối loại bỏ Gemma và bản 2.5)
     if not selected_model:
         for name in available_models:
-            if "2.0" not in name and "2.5" not in name:
+            if "gemini" in name.lower() and "2.5" not in name.lower():
                 selected_model = name
                 break
                 
+    # Chốt chặn cuối cùng: Gọi đích danh nếu quét bị lỗi
+    if not selected_model:
+        selected_model = "models/gemini-1.5-flash"
+        
     model = genai.GenerativeModel(selected_model)
     
 except Exception as e:
@@ -61,11 +68,11 @@ if "generated_result" not in st.session_state:
 if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 
-# --- CẤU HÌNH AI ĐỂ CHỐNG LỖI LẶP TỪ (STUCK LOOP) ---
+# --- CẤU HÌNH AI ĐỂ CHỐNG LỖI LẶP TỪ ---
 ai_config = {
-    "temperature": 0.7, # Tăng tính linh hoạt để không bị kẹt ở 1 câu lặp lại
+    "temperature": 0.7, 
     "top_p": 0.9,
-    "max_output_tokens": 1500 # Ngắt cầu dao nếu AI nói quá dài (khoảng 3-4 trang giấy)
+    "max_output_tokens": 2000 
 }
 
 # 4. Thanh cong cu ben trai
@@ -77,22 +84,25 @@ with st.sidebar:
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Chống lỗi lặp từ)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Sao chép nội dung siêu tốc)</div>', unsafe_allow_html=True)
 
 def get_prompt(level, text_input):
     return f"""
-    Bạn là chuyên gia giáo dục xuất sắc chuyên ra đề thi Toán và Vật lý cấp THPT.
-    PHẦN 1: Bắt buộc kiểm tra nội dung. Nếu KHÔNG PHẢI Toán hoặc Vật lý, chỉ trả lời: "TỪ_CHỐI_MÔN_HỌC".
+    Bạn là một giáo viên chuyên Toán và Vật lý cấp THPT. 
+    PHẦN 1: Nếu nội dung dưới đây KHÔNG PHẢI Toán hoặc Vật lý, hãy trả lời: "TỪ_CHỐI_MÔN_HỌC" và dừng lại.
     
     PHẦN 2: TẠO ĐỀ VÀ GIẢI CHI TIẾT
-    Tạo một đề thi mới với độ khó: {level} dựa trên cấu trúc của đề gốc dưới đây.
+    Hãy tạo một đề thi mới với độ khó: {level} dựa trên đề gốc.
     
-    YÊU CẦU:
-    1. Trình bày công thức bằng chuẩn LaTeX.
-    2. Trình bày kết quả thành 2 phần rõ rệt:
-       - **ĐỀ BÀI MỚI**
-       - **LỜI GIẢI CHI TIẾT**
-    3. TUYỆT ĐỐI KHÔNG LẶP LẠI các câu chữ. Giải xong đáp án cuối cùng là BẮT BUỘC PHẢI DỪNG LẠI (kết thúc phiên làm việc).
+    BẠN BẮT BUỘC PHẢI TUÂN THỦ ĐỊNH DẠNG TRÌNH BÀY SAU ĐÂY:
+    1. Trình bày công thức bằng chuẩn LaTeX (ví dụ: $x^2 + y^2$).
+    2. Phải chia rõ thành 2 phần bằng các dòng chữ in đậm sau:
+    
+    **ĐỀ BÀI MỚI**
+    (Nội dung đề bài)
+    
+    **LỜI GIẢI CHI TIẾT**
+    (Nội dung lời giải từng bước)
     
     Đề gốc:
     {text_input}
@@ -129,7 +139,6 @@ with tab1:
             else:
                 with st.spinner("🔬 AI đang phân tích dữ liệu và sinh đề mới..."):
                     try:
-                        # Áp dụng cấu hình chống lặp từ
                         response = model.generate_content(
                             get_prompt(difficulty, existing_text),
                             generation_config=ai_config
@@ -217,7 +226,6 @@ with tab2:
                 if st.button("🔄 AI Tạo Đề Mới Tương Tự & Giải", key="btn_tab2"):
                     with st.spinner(f"🔬 AI đang phân tích và tạo bài tương tự..."):
                         try:
-                            # Áp dụng cấu hình chống lặp từ
                             response = model.generate_content(
                                 get_prompt(difficulty, de_dang_chon["noi_dung"]),
                                 generation_config=ai_config
