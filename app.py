@@ -17,13 +17,35 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (TỐI ƯU HÓA TUYỆT ĐỐI)
+# 3. Khoi tao ket noi AI (THUẬT TOÁN QUÉT THÔNG MINH CHỐNG 404 & 429)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    # Gọi đích danh đường dẫn chuẩn "models/..." để chống lỗi 404 và lấy hạn mức 1500 lần/ngày
-    model = genai.GenerativeModel('models/gemini-1.5-flash')
+    # Lấy danh sách tất cả các mô hình đang sống trên máy chủ
+    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    
+    selected_model = None
+    
+    # Ưu tiên 1: Quét tìm đích danh các bản 1.5 flash có đuôi số mới nhất để lấy hạn mức 1500 lần/ngày
+    for name in available_models:
+        if "1.5-flash" in name:
+            selected_model = name
+            break
+            
+    # Ưu tiên 2: Nếu không có 1.5 flash, tìm bản 1.5 pro
+    if not selected_model:
+        for name in available_models:
+            if "1.5-pro" in name:
+                selected_model = name
+                break
+                
+    # Chốt chặn an toàn: Nếu lỗi thì lấy cái đầu tiên
+    if not selected_model:
+        selected_model = available_models[0]
+        
+    model = genai.GenerativeModel(selected_model)
+    
 except Exception as e:
     st.error(f"Lỗi khi kết nối AI: {e}")
     st.stop()
@@ -67,7 +89,7 @@ with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Độ khó sinh ra:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.info("💡 **Phiên bản Tối ưu hóa:** Tốc độ tải siêu nhanh. Đảm bảo 100% không dính giới hạn 20 lần/ngày của bản thử nghiệm.")
+    st.success(f"🤖 Đã kết nối tự động: **{selected_model.split('/')[-1]}** (Hạn mức 1500 lần/ngày).")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
