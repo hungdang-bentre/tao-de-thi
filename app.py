@@ -65,13 +65,15 @@ if "generated_result" not in st.session_state:
 if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 
-# --- HÀM TẠO FILE PDF ĐỂ TẢI VỀ ---
+# --- HÀM TẠO FILE PDF ĐỂ TẢI VỀ (ĐÃ SỬA LỖI HTTP) ---
 def create_pdf(text_content):
-    # Tải font Unicode (Roboto) hỗ trợ Tiếng Việt chuẩn từ Google để chống lỗi font
     font_path = "Roboto-Regular.ttf"
     if not os.path.exists(font_path):
-        url = "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Regular.ttf"
-        urllib.request.urlretrieve(url, font_path)
+        # Dùng CDN siêu tốc và thêm mác "trình duyệt" để không bị máy chủ chặn
+        url = "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/roboto/Roboto-Regular.ttf"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req) as response, open(font_path, 'wb') as out_file:
+            out_file.write(response.read())
         
     pdf = FPDF()
     pdf.add_page()
@@ -167,7 +169,7 @@ with tab1:
             else:
                 st.success("✅ Đã tạo thành công!")
                 
-                # Nút tải PDF mới
+                # Nút tải PDF
                 pdf_data = create_pdf(st.session_state.generated_result)
                 st.download_button(
                     label="📥 Tải kết quả về máy (Bản PDF)",
