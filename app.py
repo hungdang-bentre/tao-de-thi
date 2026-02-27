@@ -17,35 +17,39 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (CẤM CỬA GEMMA, CHỈ DÙNG GEMINI)
+# 3. Khoi tao ket noi AI (LƯỚI LỌC TỬ THẦN CHỐNG 429 & 404)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    # Tạo một danh sách CHỈ chứa các mô hình an toàn (Loại bỏ sạch 2.0, 2.5, gemma, exp)
+    safe_models = []
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            name_lower = m.name.lower()
+            if "2.0" not in name_lower and "2.5" not in name_lower and "gemma" not in name_lower and "exp" not in name_lower:
+                safe_models.append(m.name)
+                
     selected_model = None
     
-    # Ưu tiên 1: Tìm đúng Gemini 1.5 Flash (Bỏ qua 8b và exp)
-    for name in available_models:
-        if "gemini-1.5-flash" in name.lower() and "8b" not in name.lower() and "exp" not in name.lower():
+    # Ưu tiên 1: Tìm đúng Gemini 1.5 Flash (Bỏ qua bản 8b yếu ớt)
+    for name in safe_models:
+        if "1.5-flash" in name.lower() and "8b" not in name.lower():
             selected_model = name
             break
             
     # Ưu tiên 2: Tìm Gemini 1.5 Pro
     if not selected_model:
-        for name in available_models:
-            if "gemini-1.5-pro" in name.lower() and "exp" not in name.lower():
+        for name in safe_models:
+            if "1.5-pro" in name.lower():
                 selected_model = name
                 break
                 
-    # Ưu tiên 3: Nếu bí quá, lấy bất kỳ bản GEMINI nào (Tuyệt đối loại bỏ Gemma và bản 2.5)
-    if not selected_model:
-        for name in available_models:
-            if "gemini" in name.lower() and "2.5" not in name.lower():
-                selected_model = name
-                break
-                
-    # Chốt chặn cuối cùng: Gọi đích danh nếu quét bị lỗi
+    # Chốt chặn cuối cùng: Lấy mô hình an toàn đầu tiên tìm được
+    if not selected_model and safe_models:
+        selected_model = safe_models[0]
+        
+    # Gán thẳng nếu lưới lọc thất bại do lỗi mạng
     if not selected_model:
         selected_model = "models/gemini-1.5-flash"
         
