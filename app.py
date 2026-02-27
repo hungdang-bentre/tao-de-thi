@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import docx
 from io import BytesIO 
-import time  # Thư viện để hẹn giờ tải lại trang
+import time
 
 # 1. Cau hinh trang
 st.set_page_config(page_title="AI Exam Pro", page_icon="⚛️", layout="wide")
@@ -18,33 +18,39 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI
+# 3. Khoi tao ket noi AI (BỘ LỌC BLACKLIST CHỐNG LỖI 429 & 404)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    # Lấy danh sách tất cả các mô hình đang sống trên máy chủ
-    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    # Lấy toàn bộ danh sách AI từ Google
+    all_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    
+    # DANH SÁCH ĐEN: Loại bỏ ngay lập tức bản 2.5 và bản thử nghiệm (exp)
+    safe_models = [m for m in all_models if "2.5" not in m and "exp" not in m]
     
     selected_model = None
     
-    # Ưu tiên 1: Quét tìm đích danh các bản 1.5 flash có đuôi số mới nhất để lấy hạn mức 1500 lần/ngày
-    for name in available_models:
-        if "1.5-flash" in name:
+    # Tìm đích danh bản 1.5 flash chuẩn
+    for name in safe_models:
+        if "1.5-flash" in name and "8b" not in name:
             selected_model = name
             break
             
-    # Ưu tiên 2: Nếu không có 1.5 flash, tìm bản 1.5 pro
+    # Nếu không thấy, lùi về 1.5 pro
     if not selected_model:
-        for name in available_models:
+        for name in safe_models:
             if "1.5-pro" in name:
                 selected_model = name
                 break
                 
-    # Chốt chặn an toàn: Nếu lỗi thì lấy cái đầu tiên
+    # Chốt chặn cuối cùng nếu danh sách bị lỗi
     if not selected_model:
-        selected_model = available_models[0]
-        
+        if len(safe_models) > 0:
+            selected_model = safe_models[0]
+        else:
+            selected_model = "models/gemini-1.5-flash"
+            
     model = genai.GenerativeModel(selected_model)
     
 except Exception as e:
@@ -90,7 +96,7 @@ with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Độ khó sinh ra:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.success(f"🤖 Đã kết nối tự động: **{selected_model.split('/')[-1]}** (Hạn mức 1500 lần/ngày).")
+    st.success(f"🤖 Đã khóa chặt model: **{selected_model.split('/')[-1]}** (Hạn mức 1500 lần/ngày).")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
@@ -196,20 +202,14 @@ with tab2:
                 elif not ten_de_moi.strip() or not noi_dung_moi.strip():
                     st.warning("⚠️ Vui lòng nhập đầy đủ Tên bài và Nội dung!")
                 else:
-                    # Lưu đề mới vào bộ nhớ
                     st.session_state.kho_de.append({
                         "loai": loai_de_moi,
                         "mon": mon_de_moi,
                         "ten": ten_de_moi,
                         "noi_dung": noi_dung_moi
                     })
-                    # Hiển thị thông báo nổi bọt (Toast)
                     st.toast(f"🎉 Đã thêm thành công '{ten_de_moi}' vào kho!", icon="✅")
-                    
-                    # Tạm dừng 1 giây để người dùng đọc thông báo
                     time.sleep(1.2)
-                    
-                    # ÉP TRANG WEB TẢI LẠI ĐỂ CẬP NHẬT DANH SÁCH DROPDOWN NGAY LẬP TỨC
                     st.rerun()
 
     with sub_tab_xem:
