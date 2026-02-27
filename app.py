@@ -18,39 +18,14 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (BỘ LỌC BLACKLIST CHỐNG LỖI 429 & 404)
+# 3. Khoi tao ket noi AI (CỐ ĐỊNH PHIÊN BẢN - KHÔNG QUÉT TỰ ĐỘNG)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    # Lấy toàn bộ danh sách AI từ Google
-    all_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    
-    # DANH SÁCH ĐEN: Loại bỏ ngay lập tức bản 2.5 và bản thử nghiệm (exp)
-    safe_models = [m for m in all_models if "2.5" not in m and "exp" not in m]
-    
-    selected_model = None
-    
-    # Tìm đích danh bản 1.5 flash chuẩn
-    for name in safe_models:
-        if "1.5-flash" in name and "8b" not in name:
-            selected_model = name
-            break
-            
-    # Nếu không thấy, lùi về 1.5 pro
-    if not selected_model:
-        for name in safe_models:
-            if "1.5-pro" in name:
-                selected_model = name
-                break
-                
-    # Chốt chặn cuối cùng nếu danh sách bị lỗi
-    if not selected_model:
-        if len(safe_models) > 0:
-            selected_model = safe_models[0]
-        else:
-            selected_model = "models/gemini-1.5-flash"
-            
+    # "Bắt chết" phiên bản 1.5 Flash để nhận hạn mức 1500 lần/ngày.
+    # Loại bỏ hoàn toàn tính năng quét để tránh bị dính bản 2.0 hoặc 2.5 limit 0.
+    selected_model = "gemini-1.5-flash"
     model = genai.GenerativeModel(selected_model)
     
 except Exception as e:
@@ -96,7 +71,7 @@ with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Độ khó sinh ra:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.success(f"🤖 Đã khóa chặt model: **{selected_model.split('/')[-1]}** (Hạn mức 1500 lần/ngày).")
+    st.success(f"🤖 Đã khóa chặt model: **{selected_model}** (Miễn nhiễm với lỗi quá tải).")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
