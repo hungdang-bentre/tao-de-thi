@@ -3,6 +3,9 @@ import google.generativeai as genai
 import docx
 from io import BytesIO 
 import time
+import urllib.request
+import os
+from fpdf import FPDF
 
 # 1. Cau hinh trang
 st.set_page_config(page_title="AI Exam Pro", page_icon="⚛️", layout="wide")
@@ -18,13 +21,12 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (THUẬT TOÁN QUÉT VÀ LỌC THÔNG MINH)
+# 3. Khoi tao ket noi AI (THUẬT TOÁN BẢO MẬT & CHỐNG LỖI)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    
     selected_model = None
     
     for name in available_models:
@@ -63,26 +65,34 @@ if "generated_result" not in st.session_state:
 if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 
-# --- HÀM TẠO FILE WORD ĐỂ TẢI VỀ ---
-def create_docx(text_content):
-    doc = docx.Document()
-    doc.add_heading('ĐỀ THI & LỜI GIẢI (AI GENERATED)', 0)
+# --- HÀM TẠO FILE PDF ĐỂ TẢI VỀ ---
+def create_pdf(text_content):
+    # Tải font Unicode (Roboto) hỗ trợ Tiếng Việt chuẩn từ Google để chống lỗi font
+    font_path = "Roboto-Regular.ttf"
+    if not os.path.exists(font_path):
+        url = "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Regular.ttf"
+        urllib.request.urlretrieve(url, font_path)
+        
+    pdf = FPDF()
+    pdf.add_page()
     
+    # Nhúng font tiếng Việt vào PDF
+    pdf.add_font("Roboto", "", font_path)
+    
+    # In Tiêu đề
+    pdf.set_font("Roboto", size=16)
+    pdf.multi_cell(0, 10, txt="ĐỀ THI & LỜI GIẢI CHI TIẾT", align='C')
+    pdf.ln(5)
+    
+    # In Nội dung
+    pdf.set_font("Roboto", size=12)
     for line in text_content.split('\n'):
-        if line.strip():
-            if line.strip().startswith('**') and line.strip().endswith('**'):
-                clean_text = line.replace('**', '')
-                p = doc.add_paragraph()
-                run = p.add_run(clean_text)
-                run.bold = True
-                run.font.size = docx.shared.Pt(13)
-            else:
-                doc.add_paragraph(line)
-    
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer
+        # Loại bỏ các dấu in đậm của markdown (**) để PDF sạch sẽ hơn
+        clean_line = line.replace('**', '')
+        # Tự động xuống dòng khi nội dung quá dài
+        pdf.multi_cell(0, 8, txt=clean_line)
+        
+    return bytes(pdf.output())
 
 # 4. Thanh cong cu ben trai
 with st.sidebar:
@@ -93,7 +103,7 @@ with st.sidebar:
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Hỗ trợ Xuất file Word)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Hỗ trợ Xuất file PDF)</div>', unsafe_allow_html=True)
 
 def get_prompt(level, text_input):
     return f"""
@@ -157,12 +167,13 @@ with tab1:
             else:
                 st.success("✅ Đã tạo thành công!")
                 
-                docx_file = create_docx(st.session_state.generated_result)
+                # Nút tải PDF mới
+                pdf_data = create_pdf(st.session_state.generated_result)
                 st.download_button(
-                    label="📥 Tải kết quả về máy (File Word .docx)",
-                    data=docx_file,
-                    file_name="De_Thi_AI_Generated.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    label="📥 Tải kết quả về máy (Bản PDF)",
+                    data=pdf_data,
+                    file_name="De_Thi_AI_Generated.pdf",
+                    mime="application/pdf"
                 )
                 
                 st.markdown(st.session_state.generated_result)
@@ -243,12 +254,13 @@ with tab2:
                 else:
                     st.success("✅ Đã tạo thành công!")
                     
-                    docx_file_2 = create_docx(st.session_state.generated_result)
+                    # Nút tải PDF ở Tab 2
+                    pdf_data_2 = create_pdf(st.session_state.generated_result)
                     st.download_button(
-                        label="📥 Tải kết quả về máy (File Word)",
-                        data=docx_file_2,
-                        file_name="Bai_Tap_On_Luyen.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        label="📥 Tải kết quả về máy (Bản PDF)",
+                        data=pdf_data_2,
+                        file_name="Bai_Tap_On_Luyen.pdf",
+                        mime="application/pdf",
                         key="dl_btn_2"
                     )
                     
