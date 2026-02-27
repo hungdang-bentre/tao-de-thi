@@ -1,7 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-import docx
-from io import BytesIO 
+import docx  # Thư viện mới để đọc file Word
 
 # 1. Cau hinh trang
 st.set_page_config(page_title="AI Exam Pro", page_icon="⚛️", layout="wide")
@@ -25,18 +24,19 @@ try:
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     selected_model = available_models[0] 
     
-    # --- ĐÃ SỬA LỖI 429: CHỈ CHỌN BẢN 1.5 FLASH CÓ HẠN MỨC 1500 LẦN/NGÀY ---
     for name in available_models:
-        if "gemini-1.5-flash" in name.lower() and "8b" not in name.lower():
+        if "flash" in name.lower() and "8b" not in name.lower():
             selected_model = name
             break
+        elif "pro" in name.lower():
+            selected_model = name
             
     model = genai.GenerativeModel(selected_model)
 except Exception as e:
     st.error(f"Lỗi khi kết nối AI: {e}")
     st.stop()
 
-# --- DUY TRÌ BỘ NHỚ ---
+# --- DUY TRÌ BỘ NHỚ KHO ĐỀ & VĂN BẢN TRÍCH XUẤT ---
 if "kho_de" not in st.session_state:
     st.session_state.kho_de = [
         {"loai": "THPT Quốc Gia", "mon": "Toán", "ten": "Đề mẫu: Khảo sát Hàm số (VD)", "noi_dung": "Cho hàm số y = x^3 - 3x^2 + 2. Tìm các khoảng đồng biến, nghịch biến và điểm cực đại, cực tiểu của hàm số."},
@@ -49,37 +49,16 @@ if "generated_result" not in st.session_state:
 if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 
-# --- HÀM TẠO FILE WORD ĐỂ TẢI VỀ ---
-def create_docx(text_content):
-    doc = docx.Document()
-    doc.add_heading('ĐỀ THI & LỜI GIẢI (AI GENERATED)', 0)
-    
-    for line in text_content.split('\n'):
-        if line.strip():
-            if line.strip().startswith('**') and line.strip().endswith('**'):
-                clean_text = line.replace('**', '')
-                p = doc.add_paragraph()
-                run = p.add_run(clean_text)
-                run.bold = True
-                run.font.size = docx.shared.Pt(13)
-            else:
-                doc.add_paragraph(line)
-    
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer
-
 # 4. Thanh cong cu ben trai
 with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
     difficulty = st.selectbox("Độ khó sinh ra:", ["Giữ nguyên mức độ gốc", "Dễ hơn một chút", "Nâng cao / Khó hơn"])
     st.markdown("---")
-    st.info("💡 **Bản vá lỗi:** Đã ép hệ thống sử dụng phiên bản có hạn mức miễn phí cao nhất (1500 lần/ngày).")
+    st.info("💡 **Tính năng mới:** Đã tích hợp công cụ đọc file Word (.docx) tự động ở Tab 1.")
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Hỗ trợ Xuất file Word)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Hỗ trợ đọc file Word)</div>', unsafe_allow_html=True)
 
 def get_prompt(level, text_input):
     return f"""
@@ -91,7 +70,7 @@ def get_prompt(level, text_input):
     
     YÊU CẦU:
     1. Trình bày công thức bằng chuẩn LaTeX.
-    2. Trình bày kết quả thành 2 phần rõ rệt:
+    2. Trình bày kết quả thành 2 phần:
        - **ĐỀ BÀI MỚI**
        - **LỜI GIẢI CHI TIẾT**
     
@@ -108,6 +87,7 @@ with tab1:
     with col1:
         st.markdown("### 📥 Đầu vào tài liệu")
         
+        # Tính năng tải file Word
         uploaded_word = st.file_uploader("1. Tải lên file Word (.docx) để trích xuất chữ:", type=["docx"])
         if uploaded_word is not None:
             if st.button("📄 Rút trích chữ từ file Word"):
@@ -116,15 +96,20 @@ with tab1:
                     full_text = []
                     for para in doc.paragraphs:
                         full_text.append(para.text)
+                    # Gộp chữ lại và lưu vào bộ nhớ tạm
                     st.session_state.input_text = "\n".join(full_text)
-                    st.rerun() 
+                    st.rerun() # Làm mới trang để chữ hiện xuống ô bên dưới
                 except Exception as e:
                     st.error(f"Lỗi khi đọc file Word: {e}")
         
+        # Ô nhập chữ (tự động nhận chữ từ Word hoặc tự dán)
         existing_text = st.text_area("2. Nội dung đề bài (Chỉnh sửa tự do):", value=st.session_state.input_text, height=250)
         
+        # Nút tạo đề
         if st.button("🚀 AI Tạo Đề & Lời Giải", key="btn_tab1"):
+            # Cập nhật lại bộ nhớ tạm nếu người dùng có chỉnh sửa tay
             st.session_state.input_text = existing_text 
+            
             if not existing_text.strip():
                 st.warning("⚠️ Vui lòng tải file Word hoặc dán chữ vào ô trống!")
             else:
@@ -136,21 +121,12 @@ with tab1:
                         st.error(f"Lỗi: {e}")
 
     with col2:
-        st.markdown("### 📤 Kết quả & Tải về")
+        st.markdown("### 📤 Kết quả & Đáp án")
         if st.session_state.generated_result:
             if "TỪ_CHỐI_MÔN_HỌC" in st.session_state.generated_result:
                 st.error("❌ Chỉ hỗ trợ các môn Khoa học (Toán, Vật lý)!")
             else:
                 st.success("✅ Đã tạo thành công!")
-                
-                docx_file = create_docx(st.session_state.generated_result)
-                st.download_button(
-                    label="📥 Tải kết quả về máy (File Word .docx)",
-                    data=docx_file,
-                    file_name="De_Thi_AI_Generated.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-                
                 st.markdown(st.session_state.generated_result)
 
 # --- TAB 2: NGÂN HÀNG ĐỀ THI (BẢO MẬT) ---
@@ -176,8 +152,9 @@ with tab2:
             
             if submit_btn:
                 mat_khau_goc = st.secrets.get("ADMIN_PASSWORD", "admin123")
+                
                 if admin_pass != mat_khau_goc:
-                    st.error("❌ Mật khẩu không chính xác!")
+                    st.error("❌ Mật khẩu không chính xác! Bạn không có quyền thêm đề vào kho.")
                 elif not ten_de_moi.strip() or not noi_dung_moi.strip():
                     st.warning("⚠️ Vui lòng nhập đầy đủ Tên bài và Nội dung!")
                 else:
@@ -187,7 +164,7 @@ with tab2:
                         "ten": ten_de_moi,
                         "noi_dung": noi_dung_moi
                     })
-                    st.success(f"🎉 Đã thêm thành công '{ten_de_moi}' vào kho.")
+                    st.success(f"🎉 Đã bảo mật và thêm thành công '{ten_de_moi}' vào kho.")
 
     with sub_tab_xem:
         col3, col4 = st.columns([1, 1])
@@ -220,20 +197,10 @@ with tab2:
                             st.error(f"Lỗi: {e}")
 
         with col4:
-            st.markdown("### 📤 Kết quả & Tải về")
+            st.markdown("### 📤 Đáp Án Chi Tiết")
             if st.session_state.generated_result:
                 if "TỪ_CHỐI_MÔN_HỌC" in st.session_state.generated_result:
                     st.error("❌ Lỗi chủ đề!")
                 else:
                     st.success("✅ Đã tạo thành công!")
-                    
-                    docx_file_2 = create_docx(st.session_state.generated_result)
-                    st.download_button(
-                        label="📥 Tải kết quả về máy (File Word)",
-                        data=docx_file_2,
-                        file_name="Bai_Tap_On_Luyen.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key="dl_btn_2"
-                    )
-                    
                     st.markdown(st.session_state.generated_result)
