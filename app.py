@@ -17,13 +17,12 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (THUẬT TOÁN QUÉT VÀ LỌC THÔNG MINH)
+# 3. Khoi tao ket noi AI
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    
     selected_model = None
     
     for name in available_models:
@@ -62,6 +61,13 @@ if "generated_result" not in st.session_state:
 if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 
+# --- CẤU HÌNH AI ĐỂ CHỐNG LỖI LẶP TỪ (STUCK LOOP) ---
+ai_config = {
+    "temperature": 0.7, # Tăng tính linh hoạt để không bị kẹt ở 1 câu lặp lại
+    "top_p": 0.9,
+    "max_output_tokens": 1500 # Ngắt cầu dao nếu AI nói quá dài (khoảng 3-4 trang giấy)
+}
+
 # 4. Thanh cong cu ben trai
 with st.sidebar:
     st.title("⚙️ Tùy chỉnh Đề thi")
@@ -71,7 +77,7 @@ with st.sidebar:
 
 # 5. Tieu de chinh
 st.markdown('<div class="main-header">⚛️ Hệ Thống Tạo Đề Thi AI Pro</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Sao chép nội dung siêu tốc)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Tối ưu hóa cho Toán & Vật lý (Chống lỗi lặp từ)</div>', unsafe_allow_html=True)
 
 def get_prompt(level, text_input):
     return f"""
@@ -86,6 +92,7 @@ def get_prompt(level, text_input):
     2. Trình bày kết quả thành 2 phần rõ rệt:
        - **ĐỀ BÀI MỚI**
        - **LỜI GIẢI CHI TIẾT**
+    3. TUYỆT ĐỐI KHÔNG LẶP LẠI các câu chữ. Giải xong đáp án cuối cùng là BẮT BUỘC PHẢI DỪNG LẠI (kết thúc phiên làm việc).
     
     Đề gốc:
     {text_input}
@@ -122,7 +129,11 @@ with tab1:
             else:
                 with st.spinner("🔬 AI đang phân tích dữ liệu và sinh đề mới..."):
                     try:
-                        response = model.generate_content(get_prompt(difficulty, existing_text))
+                        # Áp dụng cấu hình chống lặp từ
+                        response = model.generate_content(
+                            get_prompt(difficulty, existing_text),
+                            generation_config=ai_config
+                        )
                         st.session_state.generated_result = response.text
                     except Exception as e:
                         st.error(f"Lỗi: {e}")
@@ -135,13 +146,11 @@ with tab1:
             else:
                 st.success("✅ Đã tạo thành công!")
                 
-                # Hiển thị trực quan để xem trước
                 st.markdown("**1. Dưới đây là giao diện xem trước (Preview):**")
                 st.markdown(st.session_state.generated_result)
                 
                 st.markdown("---")
                 
-                # Khung chứa code kèm nút copy
                 st.markdown("**2. 📋 Click vào biểu tượng Copy ở góc trên bên phải khung xám dưới đây để dán vào Word:**")
                 st.code(st.session_state.generated_result, language="markdown")
 
@@ -208,7 +217,11 @@ with tab2:
                 if st.button("🔄 AI Tạo Đề Mới Tương Tự & Giải", key="btn_tab2"):
                     with st.spinner(f"🔬 AI đang phân tích và tạo bài tương tự..."):
                         try:
-                            response = model.generate_content(get_prompt(difficulty, de_dang_chon["noi_dung"]))
+                            # Áp dụng cấu hình chống lặp từ
+                            response = model.generate_content(
+                                get_prompt(difficulty, de_dang_chon["noi_dung"]),
+                                generation_config=ai_config
+                            )
                             st.session_state.generated_result = response.text
                         except Exception as e:
                             st.error(f"Lỗi: {e}")
