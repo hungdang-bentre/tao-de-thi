@@ -21,7 +21,7 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (THUẬT TOÁN BẢO MẬT & CHỐNG LỖI)
+# 3. Khoi tao ket noi AI
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
@@ -65,36 +65,40 @@ if "generated_result" not in st.session_state:
 if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 
-# --- HÀM TẠO FILE PDF ĐỂ TẢI VỀ (ĐÃ SỬA LỖI HTTP) ---
+# --- HÀM TẠO FILE PDF ĐỂ TẢI VỀ (ĐÃ SỬA LỖI HTTP VÀ BỌC BẢO VỆ) ---
 def create_pdf(text_content):
     font_path = "Roboto-Regular.ttf"
+    
+    # Kiểm tra và tải font nếu chưa có
     if not os.path.exists(font_path):
-        # Dùng CDN siêu tốc và thêm mác "trình duyệt" để không bị máy chủ chặn
-        url = "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/roboto/Roboto-Regular.ttf"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        with urllib.request.urlopen(req) as response, open(font_path, 'wb') as out_file:
-            out_file.write(response.read())
-        
+        try:
+            # Đường dẫn cực chuẩn xác đến kho Apache của Google Fonts
+            url = "https://raw.githubusercontent.com/google/fonts/main/apache/roboto/Roboto-Regular.ttf"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req) as response, open(font_path, 'wb') as out_file:
+                out_file.write(response.read())
+        except Exception as e:
+            st.error(f"⚠️ Không thể tải Font tiếng Việt từ máy chủ. Chi tiết lỗi: {e}")
+            return None # Dừng tạo PDF để tránh sập web
+            
     pdf = FPDF()
     pdf.add_page()
     
-    # Nhúng font tiếng Việt vào PDF
-    pdf.add_font("Roboto", "", font_path)
-    
-    # In Tiêu đề
-    pdf.set_font("Roboto", size=16)
-    pdf.multi_cell(0, 10, txt="ĐỀ THI & LỜI GIẢI CHI TIẾT", align='C')
-    pdf.ln(5)
-    
-    # In Nội dung
-    pdf.set_font("Roboto", size=12)
-    for line in text_content.split('\n'):
-        # Loại bỏ các dấu in đậm của markdown (**) để PDF sạch sẽ hơn
-        clean_line = line.replace('**', '')
-        # Tự động xuống dòng khi nội dung quá dài
-        pdf.multi_cell(0, 8, txt=clean_line)
+    try:
+        pdf.add_font("Roboto", "", font_path)
+        pdf.set_font("Roboto", size=16)
+        pdf.multi_cell(0, 10, txt="ĐỀ THI & LỜI GIẢI CHI TIẾT", align='C')
+        pdf.ln(5)
         
-    return bytes(pdf.output())
+        pdf.set_font("Roboto", size=12)
+        for line in text_content.split('\n'):
+            clean_line = line.replace('**', '')
+            pdf.multi_cell(0, 8, txt=clean_line)
+            
+        return bytes(pdf.output())
+    except Exception as e:
+        st.error(f"⚠️ Lỗi khi vẽ PDF: {e}")
+        return None
 
 # 4. Thanh cong cu ben trai
 with st.sidebar:
@@ -169,14 +173,14 @@ with tab1:
             else:
                 st.success("✅ Đã tạo thành công!")
                 
-                # Nút tải PDF
                 pdf_data = create_pdf(st.session_state.generated_result)
-                st.download_button(
-                    label="📥 Tải kết quả về máy (Bản PDF)",
-                    data=pdf_data,
-                    file_name="De_Thi_AI_Generated.pdf",
-                    mime="application/pdf"
-                )
+                if pdf_data is not None:
+                    st.download_button(
+                        label="📥 Tải kết quả về máy (Bản PDF)",
+                        data=pdf_data,
+                        file_name="De_Thi_AI_Generated.pdf",
+                        mime="application/pdf"
+                    )
                 
                 st.markdown(st.session_state.generated_result)
 
@@ -256,14 +260,14 @@ with tab2:
                 else:
                     st.success("✅ Đã tạo thành công!")
                     
-                    # Nút tải PDF ở Tab 2
                     pdf_data_2 = create_pdf(st.session_state.generated_result)
-                    st.download_button(
-                        label="📥 Tải kết quả về máy (Bản PDF)",
-                        data=pdf_data_2,
-                        file_name="Bai_Tap_On_Luyen.pdf",
-                        mime="application/pdf",
-                        key="dl_btn_2"
-                    )
+                    if pdf_data_2 is not None:
+                        st.download_button(
+                            label="📥 Tải kết quả về máy (Bản PDF)",
+                            data=pdf_data_2,
+                            file_name="Bai_Tap_On_Luyen.pdf",
+                            mime="application/pdf",
+                            key="dl_btn_2"
+                        )
                     
                     st.markdown(st.session_state.generated_result)
