@@ -17,39 +17,29 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (LƯỚI LỌC TỬ THẦN CHỐNG 429 & 404)
+# 3. Khoi tao ket noi AI (DANH SÁCH TRẮNG - KHÓA CHẶT BẢN 1.5)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    # Tạo một danh sách CHỈ chứa các mô hình an toàn (Loại bỏ sạch 2.0, 2.5, gemma, exp)
-    safe_models = []
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            name_lower = m.name.lower()
-            if "2.0" not in name_lower and "2.5" not in name_lower and "gemma" not in name_lower and "exp" not in name_lower:
-                safe_models.append(m.name)
-                
+    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    
     selected_model = None
     
-    # Ưu tiên 1: Tìm đúng Gemini 1.5 Flash (Bỏ qua bản 8b yếu ớt)
-    for name in safe_models:
-        if "1.5-flash" in name.lower() and "8b" not in name.lower():
+    # Ưu tiên 1: Chỉ tìm phiên bản 1.5 Flash chuẩn
+    for name in available_models:
+        if "1.5-flash" in name.lower() and "8b" not in name.lower() and "exp" not in name.lower():
             selected_model = name
             break
             
-    # Ưu tiên 2: Tìm Gemini 1.5 Pro
+    # Ưu tiên 2: Nếu không thấy Flash, chỉ tìm bản 1.5 Pro
     if not selected_model:
-        for name in safe_models:
-            if "1.5-pro" in name.lower():
+        for name in available_models:
+            if "1.5-pro" in name.lower() and "exp" not in name.lower():
                 selected_model = name
                 break
                 
-    # Chốt chặn cuối cùng: Lấy mô hình an toàn đầu tiên tìm được
-    if not selected_model and safe_models:
-        selected_model = safe_models[0]
-        
-    # Gán thẳng nếu lưới lọc thất bại do lỗi mạng
+    # Chốt chặn tuyệt đối: Nếu máy chủ trả về danh sách lỗi, gọi đích danh bản 1.5-flash
     if not selected_model:
         selected_model = "models/gemini-1.5-flash"
         
