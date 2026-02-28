@@ -17,40 +17,34 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (LOẠI BỎ HOÀN TOÀN GÕ TAY TÊN MODEL CHỐNG 404)
+# 3. Khoi tao ket noi AI (CHỈ CHO PHÉP 1.5 VÀ GỌI ĐÍCH DANH BẢN 002 NẾU LỖI)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    # Lấy danh sách 100% các model đang TỒN TẠI trên máy chủ Google
     all_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     
-    # Lọc bỏ các bản bị bóp băng thông (2.0, 2.5, 3.x, gemma, exp, 8b)
-    blacklist = ['2.0', '2.5', '3.', '-3-', 'gemma', 'exp', '8b']
-    valid_models = [name for name in all_models if not any(bad in name.lower() for bad in blacklist)]
+    # CHỈ gom những model có chữ "1.5", tuyệt đối loại bỏ "8b" và bản thử nghiệm "exp"
+    safe_models = [m for m in all_models if "1.5" in m and "8b" not in m.lower() and "exp" not in m.lower()]
     
     selected_model = None
     
-    # Ưu tiên 1: Tìm bản 1.5 Flash an toàn
-    for name in valid_models:
-        if "1.5-flash" in name.lower():
+    # Ưu tiên 1: Tìm bản Flash trong danh sách an toàn
+    for name in safe_models:
+        if "flash" in name.lower():
             selected_model = name
             break
             
-    # Ưu tiên 2: Tìm bản 1.5 Pro
+    # Ưu tiên 2: Tìm bản Pro trong danh sách an toàn
     if not selected_model:
-        for name in valid_models:
-            if "1.5-pro" in name.lower():
+        for name in safe_models:
+            if "pro" in name.lower():
                 selected_model = name
                 break
                 
-    # Chốt chặn an toàn 1: Nếu không có 1.5, lấy đại model hợp lệ đầu tiên
-    if not selected_model and valid_models:
-        selected_model = valid_models[0]
-        
-    # CHỐT CHẶN TUYỆT ĐỐI CHỐNG 404: Lấy đại model đầu tiên mà Google trả về (Dù là bản nào cũng được miễn là web không sập)
-    if not selected_model and all_models:
-        selected_model = all_models[0]
+    # CHỐT CHẶN TUYỆT ĐỐI: Gọi đích danh bản 002 ổn định nhất của Google, không bao giờ lo 404 hay 429
+    if not selected_model:
+        selected_model = "models/gemini-1.5-flash-002"
         
     model = genai.GenerativeModel(selected_model)
     
