@@ -17,34 +17,39 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (CHỈ CHO PHÉP 1.5 VÀ GỌI ĐÍCH DANH BẢN 002 NẾU LỖI)
+# 3. Khoi tao ket noi AI (QUÉT THÔNG MINH, KHÔNG TỰ BỊA ĐUÔI SỐ)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    all_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    
-    # CHỈ gom những model có chữ "1.5", tuyệt đối loại bỏ "8b" và bản thử nghiệm "exp"
-    safe_models = [m for m in all_models if "1.5" in m and "8b" not in m.lower() and "exp" not in m.lower()]
+    # Lấy danh sách model thực tế đang tồn tại
+    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     
     selected_model = None
     
-    # Ưu tiên 1: Tìm bản Flash trong danh sách an toàn
-    for name in safe_models:
-        if "flash" in name.lower():
+    # Ưu tiên 1: Tóm ngay bản 1.5 Flash chuẩn đang hiển thị trong danh sách (Né 8b và exp)
+    for name in available_models:
+        if "gemini-1.5-flash" in name.lower() and "8b" not in name.lower() and "exp" not in name.lower():
             selected_model = name
             break
             
-    # Ưu tiên 2: Tìm bản Pro trong danh sách an toàn
+    # Ưu tiên 2: Nếu không có Flash, tóm bản 1.5 Pro
     if not selected_model:
-        for name in safe_models:
-            if "pro" in name.lower():
+        for name in available_models:
+            if "gemini-1.5-pro" in name.lower() and "exp" not in name.lower():
                 selected_model = name
                 break
                 
-    # CHỐT CHẶN TUYỆT ĐỐI: Gọi đích danh bản 002 ổn định nhất của Google, không bao giờ lo 404 hay 429
+    # Ưu tiên 3: Có bản 1.5 nào thì lấy bản đó
     if not selected_model:
-        selected_model = "models/gemini-1.5-flash-002"
+        for name in available_models:
+            if "1.5" in name:
+                selected_model = name
+                break
+                
+    # Chốt chặn cuối cùng: Gọi bí danh chung nhất, Google tự điều phối
+    if not selected_model:
+        selected_model = "gemini-1.5-flash"
         
     model = genai.GenerativeModel(selected_model)
     
