@@ -17,37 +17,32 @@ div.stButton > button:first-child:hover { background-color: #1D4ED8; transform: 
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Khoi tao ket noi AI (QUÉT THÔNG MINH, KHÔNG TỰ BỊA ĐUÔI SỐ)
+# 3. Khoi tao ket noi AI 
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    # Lấy danh sách model thực tế đang tồn tại
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     
     selected_model = None
     
-    # Ưu tiên 1: Tóm ngay bản 1.5 Flash chuẩn đang hiển thị trong danh sách (Né 8b và exp)
     for name in available_models:
         if "gemini-1.5-flash" in name.lower() and "8b" not in name.lower() and "exp" not in name.lower():
             selected_model = name
             break
             
-    # Ưu tiên 2: Nếu không có Flash, tóm bản 1.5 Pro
     if not selected_model:
         for name in available_models:
             if "gemini-1.5-pro" in name.lower() and "exp" not in name.lower():
                 selected_model = name
                 break
                 
-    # Ưu tiên 3: Có bản 1.5 nào thì lấy bản đó
     if not selected_model:
         for name in available_models:
             if "1.5" in name:
                 selected_model = name
                 break
                 
-    # Chốt chặn cuối cùng: Gọi bí danh chung nhất, Google tự điều phối
     if not selected_model:
         selected_model = "gemini-1.5-flash"
         
@@ -70,12 +65,20 @@ if "generated_result" not in st.session_state:
 if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 
-# --- CẤU HÌNH AI ĐỂ CHỐNG LỖI LẶP TỪ ---
+# --- CẤU HÌNH AI & TẮT BỘ LỌC KIỂM DUYỆT (CHỐNG LỖI FINISH_REASON = 2) ---
 ai_config = {
     "temperature": 0.7, 
     "top_p": 0.9,
-    "max_output_tokens": 2000 
+    "max_output_tokens": 8192 # Tăng tối đa dung lượng để AI viết thoải mái không bị ngắt quãng
 }
+
+# Tắt toàn bộ màng lọc an toàn để xử lý tốt các tác phẩm văn học, lịch sử có yếu tố chiến tranh
+safety_settings = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+]
 
 # 4. Thanh cong cu ben trai
 with st.sidebar:
@@ -143,9 +146,15 @@ with tab1:
                     try:
                         response = model.generate_content(
                             get_prompt(difficulty, existing_text),
-                            generation_config=ai_config
+                            generation_config=ai_config,
+                            safety_settings=safety_settings
                         )
-                        st.session_state.generated_result = response.text
+                        # Đặt bẫy an toàn (try-except) để web không bị sập màn hình xám nếu AI vẫn bị lỗi
+                        try:
+                            st.session_state.generated_result = response.text
+                        except ValueError:
+                            st.session_state.generated_result = "⚠️ LỖI BẤT THƯỜNG: Bài giải của AI quá dài hoặc bị lỗi cấu trúc từ máy chủ Google. Vui lòng bấm 'Tạo Đề' lại một lần nữa!"
+                            
                     except Exception as e:
                         st.error(f"Lỗi: {e}")
 
@@ -154,6 +163,8 @@ with tab1:
         if st.session_state.generated_result:
             if "TỪ_CHỐI_MÔN_HỌC" in st.session_state.generated_result:
                 st.error("❌ Chỉ hỗ trợ các môn Khoa học (Toán, Vật lý)!")
+            elif "⚠️ LỖI BẤT THƯỜNG" in st.session_state.generated_result:
+                st.error(st.session_state.generated_result)
             else:
                 st.success("✅ Đã tạo thành công!")
                 
@@ -230,9 +241,15 @@ with tab2:
                         try:
                             response = model.generate_content(
                                 get_prompt(difficulty, de_dang_chon["noi_dung"]),
-                                generation_config=ai_config
+                                generation_config=ai_config,
+                                safety_settings=safety_settings
                             )
-                            st.session_state.generated_result = response.text
+                            # Đặt bẫy an toàn
+                            try:
+                                st.session_state.generated_result = response.text
+                            except ValueError:
+                                st.session_state.generated_result = "⚠️ LỖI BẤT THƯỜNG: Bài giải của AI quá dài hoặc bị lỗi cấu trúc từ máy chủ Google. Vui lòng bấm 'Tạo Đề' lại một lần nữa!"
+                                
                         except Exception as e:
                             st.error(f"Lỗi: {e}")
 
@@ -241,6 +258,8 @@ with tab2:
             if st.session_state.generated_result:
                 if "TỪ_CHỐI_MÔN_HỌC" in st.session_state.generated_result:
                     st.error("❌ Lỗi chủ đề!")
+                elif "⚠️ LỖI BẤT THƯỜNG" in st.session_state.generated_result:
+                    st.error(st.session_state.generated_result)
                 else:
                     st.success("✅ Đã tạo thành công!")
                     
